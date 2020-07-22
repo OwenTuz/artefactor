@@ -44,6 +44,19 @@ func init() {
 		"",
 		"where images have been published e.g. private-registry.local")
 
+	addFlagWithEnvDefault(
+		imageNamesCmd,
+		FlagDockerUserName,
+		"",
+		FlagDockerUserNameHelp)
+
+	addFlagWithEnvDefault(
+		imageNamesCmd,
+		FlagDockerPassword,
+		"",
+		FlagDockerPasswordHelp)
+
+
 	RootCmd.AddCommand(imageNamesCmd)
 }
 
@@ -73,13 +86,15 @@ func imageNames(c *cobra.Command) error {
 			repoDigests, err := docker.GetClientRepoDigestsByRegistry(newBareImageName, registry)
 			if err != nil {
 				if docker.IsClientErrNotFound(err) {
-					fmt.Println(err.Error())
-					return fmt.Errorf("Docker could not find metadata for the image '%s', possibly the image has not been published yet. Please try running an `artefactor publish` for the image before re-running this command", newBareImageName)
-				}
-				return err
+                    digest, err := docker.GetImageDigestFromRemoteRegistry(newBareImageName, getCredsFromFlags(c))
+                    if err != nil {
+				        return fmt.Errorf("No repoDigest matching %s found locally or in target registry. Please re run artefactor publish to upload and generate a repoDigest for this image in the target environment", newBareImageName)
+                    }
+                    repoDigests = append(repoDigests, digest)
+				} else { return err }
 			}
 			if len(repoDigests) < 1 {
-				return fmt.Errorf("No repoDigests stored for target registry. Please re run artefactor publish to upload and generate a repoDigest for this image in the target environment")
+		        return fmt.Errorf("No repoDigest matching %s found locally or in target registry. Please re run artefactor publish to upload and generate a repoDigest for this image in the target environment", newBareImageName)
 			} else if len(repoDigests) > 1 {
 				// multiple version of image may cause this? defensive code: Not sure if this will ever happen
 				return fmt.Errorf("Ambiguous repoDigests for image: %s, found multiple repo Digests attached to docker image:  %#v, Require unambiguous number of repoDigests for the image", image, repoDigests)

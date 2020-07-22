@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/appvia/artefactor/pkg/util"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/jsonmessage"
 )
@@ -158,6 +159,32 @@ func GetClientRepoDigests(imageID string) ([]string, error) {
 		return nil, err
 	}
 	return ii.RepoDigests, nil
+}
+
+func GetImageDigestFromRemoteRegistry(imageID string, creds *util.Creds) (string, error) {
+    ctx := context.Background()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return "", err
+	}
+    var authStr string
+	if creds != nil {
+		if auth, err := GetAuthString(
+			imageID, creds.Username, creds.Password); err != nil {
+			return "", fmt.Errorf("error with credentials provided:%s", err)
+		} else {
+            authStr = auth
+		}
+	} else {
+        authStr = GetAuth(imageID)
+	}
+    distInfo, err := cli.DistributionInspect(ctx, imageID, authStr)
+	if err != nil {
+		return "", err
+	}
+    digest := ShaIdent + strings.Split(distInfo.Descriptor.Digest.String(), ":")[1]
+    return digest, nil
+
 }
 
 // GetImages retrieves an image struct array
